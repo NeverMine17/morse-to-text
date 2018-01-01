@@ -14,13 +14,13 @@ class Plotter:
             axis(xmax=length)
         if height != -1:
             axis(ymax=height)
-        #savefig(name + "." + self.format, format=self.format, dpi=dpi)
+        # savefig(name + "." + self.format, format=self.format, dpi=dpi)
         cla()
 
     @staticmethod
     def specgram(name, signal):
         spectrogram = specgram(signal, Fs=2)
-        #savefig(name + "." + self.format, format=self.format)
+        # savefig(name + "." + self.format, format=self.format)
         cla()
         return spectrogram
 
@@ -35,6 +35,22 @@ class DummyPlotter:
         cla()
         return spectrogram
 
+
+class AudioArray:
+    def __init__(self, array: numpy.ndarray):
+        self.data = array
+
+    def setdata(self, data):
+        self.data = data
+
+    def getdata(self):
+        return self.data
+
+    def getlength(self):
+        return len(self.data)
+
+    def saveas(self, path):
+        numpy.savez_compressed(path, self.data)
 
 class SoundFile:
 
@@ -71,7 +87,7 @@ class SignalFilter:
         trans = numpy.fft.rfft(soundfile.getdata())
         trans_real = numpy.abs(trans)
         # 2b - lo grafico
-        #plotter.saveplot("transformed", trans_real)
+        # plotter.saveplot("transformed", trans_real)
         # 3 - busco la frecuencia
         band = 2000
         # ignore the first 200Hz
@@ -84,10 +100,10 @@ class SignalFilter:
         filter_array = numpy.append(numpy.zeros(int(min), dtype=numpy.float64), numpy.ones(band, dtype=numpy.float64))
         filter_array = numpy.append(filter_array, numpy.zeros(len(trans_real) - len(filter_array)))
         filtered_array = numpy.multiply(trans, filter_array)
-        #plotter.saveplot("filtered_trans", numpy.abs(filtered_array))
+        # plotter.saveplot("filtered_trans", numpy.abs(filtered_array))
         # 4 - antitransformo
         filtered_signal = numpy.array(numpy.fft.irfft(filtered_array)[:soundfile.getlength()], dtype="int16")
-        #plotter.saveplot("filtered_signal", filtered_signal)
+        # plotter.saveplot("filtered_signal", filtered_signal)
         soundfile.setdata(filtered_signal)
 
 
@@ -97,13 +113,13 @@ class SpectreAnalyzer:
         # spectrogram = specgram(signal)
         # savefig("spectrogram", format="pdf")
         # cla()
-        spectrogram = plotter.specgram("spectrogram", signal)
+        spectrogram = Plotter().specgram("spectrogram", signal)
         return spectrogram
 
     def sumarizecolumns(self, mat):
         vec_ones = numpy.ones(len(mat))
         vec_sum = (numpy.matrix(vec_ones) * numpy.matrix(mat)).transpose()
-        #plotter.saveplot("frecuency_volume", vec_sum)
+        # plotter.saveplot("frecuency_volume", vec_sum)
         return vec_sum
 
     def findpresence(self, vec_sum):
@@ -112,7 +128,7 @@ class SpectreAnalyzer:
         for i in range(len(presence)):
             if vec_sum[i] > threshold:
                 presence[i] = 1
-        #plotter.saveplot("presence", presence, dpi=300, height=5)
+        # plotter.saveplot("presence", presence, dpi=300, height=5)
         return presence
 
     def findpulses(self, soundfile):
@@ -167,7 +183,7 @@ class PulsesAnalyzer:
             onesl[i] = vec[2 * i]
             zerosl[i] = vec[2 * i + 1]
         onesl[-1] = vec[-1]
-        return (onesl, zerosl)
+        return onesl, zerosl
 
     def findshortlongdup(self, vec):
         sor = numpy.sort(vec)
@@ -176,8 +192,8 @@ class PulsesAnalyzer:
             if sor[i] > 2 * last:
                 shorts = sor[:i - 1]
                 longs = sor[i:]
-                return (shorts, longs)
-        return (vec, [])
+                return shorts, longs
+        return vec, []
 
     def createshortlong(self, shorts, longs):
         return ShortLong(shorts, longs)
@@ -262,35 +278,25 @@ class StringTranslator:
         return text
 
 
-if len(numpy.sys.argv) < 2:
-    print("Usage: " + numpy.sys.argv[0] + " soundfile.wav [--report[=pdf|=png]]")
-    numpy.sys.exit(1)
+def decode_morse_audio(path: str):
+    the_file = SoundFile(path)
+    # the_file.saveplot("original")
 
-plotter = DummyPlotter()
-if len(numpy.sys.argv) > 2:
-    if numpy.sys.argv[2] == "--report" or numpy.sys.argv[2] == "--report=pdf":
-        plotter = Plotter()
-    if numpy.sys.argv[2] == "--report=png":
-        plotter = Plotter()
+    the_filter = SignalFilter()
+    the_filter.filter(the_file)
+    # the_file.saveas("filtered.wav")
 
-the_file = SoundFile(numpy.sys.argv[1])
-# the_file = SoundFile("wikipedia.wav")
-#the_file.saveplot("original")
+    analyzer = SpectreAnalyzer()
+    pulses = analyzer.findpulses(the_file)
 
-the_filter = SignalFilter()
-the_filter.filter(the_file)
-# the_file.saveas("filtered.wav")
+    pul_translator = PulsesTranslator()
+    code_string = pul_translator.tostring(pulses)
 
-analyzer = SpectreAnalyzer()
-pulses = analyzer.findpulses(the_file)
+    str_translator = StringTranslator()
+    s = str_translator.totext(code_string)
 
-pul_translator = PulsesTranslator()
-code_string = pul_translator.tostring(pulses)
+    return s
 
-str_translator = StringTranslator()
-s = str_translator.totext(code_string)
 
-print(code_string)
-print(s)
-
-#####
+if __name__ == '__main__':
+    print(decode_morse_audio('az.wav'))
